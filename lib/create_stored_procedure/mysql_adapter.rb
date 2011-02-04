@@ -1,12 +1,29 @@
 module ActiveRecord
   module ConnectionAdapters
     class MysqlAdapter
+      StoredRoutine = Struct.new(:body)
 
-      StoredProcedure = Struct.new(:body)
-      
-      # TODO add test coverage with this plugin
+      def stored_functions
+        results = execute("SHOW FUNCTION STATUS WHERE db ='#{current_database}'")
+        names = []
+        results.each { |row| names << row[1] }
+        results.free
+        names
+      end
+
+      def remove_stored_function(stored_function_name)
+        execute("DROP FUNCTION IF EXISTS #{stored_function_name}")
+      end
+
+      def create_stored_function(stored_function_name, options = {}) #:nodoc:
+        function = StoredRoutine.new
+        yield(function)
+        remove_stored_procedure(stored_function_name)
+        execute(function.body)
+      end
+
       def stored_procedures
-        results = execute("SHOW PROCEDURE STATUS WHERE db = '#{current_database}'")
+        results = execute("SHOW PROCEDURE STATUS WHERE db ='#{current_database}'")
         names = []
         results.each { |row| names << row[1] }
         results.free
@@ -18,7 +35,7 @@ module ActiveRecord
       end
 
       def create_stored_procedure(stored_procedure_name, options = {}) #:nodoc:
-        procedure = StoredProcedure.new
+        procedure = StoredRoutine.new
         yield(procedure)
         remove_stored_procedure(stored_procedure_name)
         execute(procedure.body)
@@ -37,7 +54,7 @@ module ActiveRecord
               rows << next_result.all_hashes
               next_result.free
             rescue Mysql::Error => e
-              # The final result from the procedure is a status result that includes no result set. 
+              # The final result from the procedure is a status result that includes no result set.
               # The status indicates whether the procedure succeeded or an error occurred.
             end
           end
